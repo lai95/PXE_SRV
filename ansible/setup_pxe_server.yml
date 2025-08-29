@@ -1,0 +1,57 @@
+---
+- name: Setup PXE Server with Foreman/Katello
+  hosts: pxe_server
+  become: yes
+  vars:
+    foreman_admin_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+    foreman_db_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+    pxe_server_ip: "{{ ansible_default_ipv4.address }}"
+    pxe_server_hostname: "{{ inventory_hostname }}"
+    
+  pre_tasks:
+    - name: Update system packages
+      dnf:
+        update_cache: yes
+        state: latest
+      tags: [system, packages]
+
+  roles:
+    - role: system_setup
+    - role: foreman_installation
+    - role: pxe_configuration
+    - role: diagnostic_tools
+    - role: report_storage
+
+  post_tasks:
+    - name: Display Foreman access information
+      debug:
+        msg: |
+          ========================================
+          PXE Server Setup Complete!
+          ========================================
+          
+          Foreman Web Interface: http://{{ pxe_server_ip }}:3000
+          Username: admin
+          Password: {{ foreman_admin_password }}
+          
+          PXE Boot Directory: /var/lib/tftpboot
+          Report Storage: /var/lib/foreman-reports
+          
+          Next Steps:
+          1. Access Foreman web interface
+          2. Configure PXE templates
+          3. Build diagnostic boot image
+          4. Test PXE boot
+          
+          ========================================
+      
+    - name: Save credentials to file
+      copy:
+        content: |
+          Foreman Admin: admin / {{ foreman_admin_password }}
+          Foreman Database: foreman / {{ foreman_db_password }}
+          PXE Server IP: {{ pxe_server_ip }}
+          Generated: {{ ansible_date_time.iso8601 }}
+        dest: /root/foreman_credentials.txt
+        mode: '0600'
+      tags: [credentials, security]

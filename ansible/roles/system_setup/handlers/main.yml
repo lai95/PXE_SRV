@@ -1,0 +1,31 @@
+---
+- name: restart chronyd
+  systemd:
+    name: chronyd
+    state: restarted
+    daemon_reload: yes
+
+- name: reload firewalld
+  systemd:
+    name: firewalld
+    state: reloaded
+
+- name: reload sysctl
+  sysctl:
+    name: "{{ item }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - name: net.core.rmem_max
+      value: "134217728"
+    - name: net.core.wmem_max
+      value: "134217728"
+    - name: net.ipv4.tcp_rmem
+      value: "4096 87380 134217728"
+    - name: net.ipv4.tcp_wmem
+      value: "4096 65536 134217728"
+    - name: vm.max_map_count
+      value: "262144"
+    - name: fs.file-max
+      value: "2097152"

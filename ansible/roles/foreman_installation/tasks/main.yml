@@ -1,0 +1,77 @@
+---
+- name: Install EPEL repository
+  dnf:
+    name: epel-release
+    state: present
+  tags: [foreman, epel]
+
+- name: Install Foreman repository
+  dnf:
+    name: https://yum.theforeman.org/releases/{{ foreman_version }}/el9/x86_64/foreman-release.rpm
+    state: present
+  tags: [foreman, repository]
+
+- name: Install Katello repository
+  dnf:
+    name: https://yum.theforeman.org/katello/{{ foreman_version }}/katello/el9/x86_64/katello-repos-latest.rpm
+    state: present
+  tags: [foreman, katello]
+
+- name: Install Foreman installer
+  dnf:
+    name: foreman-installer
+    state: present
+  tags: [foreman, installer]
+
+- name: Create Foreman configuration file
+  template:
+    src: foreman-installer-answers.yaml.j2
+    dest: /etc/foreman-installer/scenarios.d/foreman-answers.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  tags: [foreman, config]
+
+- name: Run Foreman installer
+  command: foreman-installer --scenario katello
+  args:
+    creates: /etc/foreman/foreman.yml
+  register: foreman_install
+  tags: [foreman, install]
+
+- name: Wait for Foreman to be ready
+  uri:
+    url: "http://{{ pxe_server_ip }}:3000"
+    status_code: 200
+  register: foreman_ready
+  until: foreman_ready.status == 200
+  retries: 30
+  delay: 10
+  tags: [foreman, wait]
+
+- name: Get Foreman admin password
+  command: foreman-rake permissions:reset
+  register: foreman_password_reset
+  tags: [foreman, password]
+
+- name: Extract admin password
+  set_fact:
+    foreman_admin_password: "{{ foreman_password_reset.stdout | regex_search('Password: (.+)', '\\1') }}"
+  tags: [foreman, password]
+
+- name: Install Foreman plugins
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ foreman_plugins }}"
+  tags: [foreman, plugins]
+
+- name: Restart Foreman services
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - foreman
+    - httpd
+    - postgresql
+  tags: [foreman, restart]

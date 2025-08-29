@@ -1,0 +1,45 @@
+---
+all:
+  children:
+    pxe_servers:
+      hosts:
+        pxe_server:
+          ansible_host: "{{ lookup('env', 'PXE_SERVER_IP') | default('192.168.1.100', true) }}"
+          ansible_user: "{{ lookup('env', 'PXE_SERVER_USER') | default('root', true) }}"
+          ansible_ssh_private_key_file: "{{ lookup('env', 'PXE_SERVER_SSH_KEY') | default('~/.ssh/id_rsa', true) }}"
+          ansible_python_interpreter: /usr/bin/python3
+          
+  vars:
+    # PXE Server Configuration
+    pxe_server_domain: "{{ lookup('env', 'PXE_DOMAIN') | default('pxe.local', true) }}"
+    pxe_server_timezone: "{{ lookup('env', 'PXE_TIMEZONE') | default('UTC', true) }}"
+    
+    # Network Configuration
+    pxe_network: "{{ lookup('env', 'PXE_NETWORK') | default('192.168.1.0/24', true) }}"
+    pxe_gateway: "{{ lookup('env', 'PXE_GATEWAY') | default('192.168.1.1', true) }}"
+    pxe_dns: "{{ lookup('env', 'PXE_DNS') | default('8.8.8.8,8.8.4.4', true) }}"
+    
+    # Foreman Configuration
+    foreman_version: "{{ lookup('env', 'FOREMAN_VERSION') | default('3.0', true) }}"
+    foreman_plugins:
+      - foreman_ansible
+      - foreman_bootdisk
+      - foreman_discovery
+      - foreman_remote_execution
+      - foreman_templates
+    
+    # PXE Configuration
+    pxe_boot_timeout: 30
+    pxe_menu_timeout: 10
+    pxe_default_entry: "Diagnostic Boot"
+    
+    # Storage Configuration
+    report_storage_path: /var/lib/foreman-reports
+    report_storage_size: "10G"
+    pxe_boot_size: "5G"
+    
+    # Security Configuration
+    firewall_enabled: true
+    selinux_enabled: true
+    ssh_key_based_auth: true
+    password_auth_disabled: true
