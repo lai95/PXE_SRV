@@ -64,8 +64,9 @@ check_prerequisites() {
     # Check Docker Compose version
     local compose_version=$(docker-compose --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     if [ "$(echo "$compose_version" | cut -d. -f1)" -lt 1 ] || [ "$(echo "$compose_version" | cut -d. -f2)" -lt 28 ]; then
-        log_error "Docker Compose version $compose_version is too old. Version 1.28.0+ required"
-        exit 1
+        log_warn "Docker Compose version $compose_version detected. Some features may not work properly."
+        log_info "Recommended: Update to Docker Compose 1.28.0+ for best compatibility"
+        log_info "Continuing with current version..."
     fi
     
     log_info "Prerequisites check passed"
@@ -262,10 +263,18 @@ deploy_services() {
     log_section "Deploying Services"
     
     log_info "Building Docker images..."
-    docker-compose build
     
-    log_info "Starting services..."
-    docker-compose up -d
+    # Try docker-compose first, fallback to docker compose
+    if docker-compose --version &> /dev/null; then
+        docker-compose build
+        log_info "Starting services..."
+        docker-compose up -d
+    else
+        log_info "Using Docker Compose V2..."
+        docker compose build
+        log_info "Starting services..."
+        docker compose up -d
+    fi
     
     # Wait for services to be ready
     log_info "Waiting for services to be ready..."
@@ -273,7 +282,11 @@ deploy_services() {
     
     # Check service status
     log_info "Checking service status..."
-    docker-compose ps
+    if docker-compose --version &> /dev/null; then
+        docker-compose ps
+    else
+        docker compose ps
+    fi
     
     log_info "Services deployed successfully"
 }
@@ -357,7 +370,11 @@ setup_monitoring() {
     log_section "Setting Up Monitoring"
     
     log_info "Starting monitoring services..."
-    docker-compose --profile monitoring up -d
+    if docker-compose --version &> /dev/null; then
+        docker-compose --profile monitoring up -d
+    else
+        docker compose --profile monitoring up -d
+    fi
     
     # Wait for Grafana
     log_info "Waiting for Grafana to be ready..."
@@ -401,10 +418,17 @@ display_system_info() {
     echo "4. Monitor diagnostic reports via the API"
     echo ""
     echo "Useful Commands:"
-    echo "- View logs: docker-compose logs -f [service_name]"
-    echo "- Stop services: docker-compose down"
-    echo "- Restart services: docker-compose restart"
-    echo "- Update services: docker-compose pull && docker-compose up -d"
+    if docker-compose --version &> /dev/null; then
+        echo "- View logs: docker-compose logs -f [service_name]"
+        echo "- Stop services: docker-compose down"
+        echo "- Restart services: docker-compose restart"
+        echo "- Update services: docker-compose pull && docker-compose up -d"
+    else
+        echo "- View logs: docker compose logs -f [service_name]"
+        echo "- Stop services: docker compose down"
+        echo "- Restart services: docker compose restart"
+        echo "- Update services: docker compose pull && docker compose up -d"
+    fi
 }
 
 # Main execution
