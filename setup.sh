@@ -349,12 +349,23 @@ configure_foreman() {
         fi
         
         # Check if Foreman installer completed
+        log_info "Checking if Foreman was installed..."
         if docker exec pxe_server test -f /etc/foreman/foreman.yml 2>/dev/null; then
             log_info "Foreman configuration file found, checking service status..."
             if docker exec pxe_server systemctl is-active --quiet foreman 2>/dev/null || \
                docker exec pxe_server pgrep -f foreman >/dev/null 2>&1; then
                 log_info "Foreman service is running in container"
                 break
+            fi
+        else
+            log_warn "Foreman configuration file NOT found - installer may have failed"
+            # Check if Foreman packages are installed
+            if docker exec pxe_server rpm -qa | grep -q foreman; then
+                log_info "Foreman packages are installed but not configured"
+            else
+                log_error "Foreman packages are NOT installed - Docker build failed!"
+                log_info "Container logs may show the failure reason"
+                docker logs pxe_server | tail -20
             fi
         fi
         
