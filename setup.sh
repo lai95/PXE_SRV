@@ -314,11 +314,36 @@ configure_foreman() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        # Try multiple possible Foreman URLs
-        if curl -s http://localhost:3000/api/v2/status &> /dev/null || \
-           curl -s http://127.0.0.1:3000/api/v2/status &> /dev/null || \
-           curl -s http://192.168.1.3:3000/api/v2/status &> /dev/null; then
-            log_info "Foreman is ready"
+        # Try multiple possible Foreman URLs with better debugging
+        log_info "Attempting to connect to Foreman (attempt $attempt/$max_attempts)..."
+        
+        # Check localhost
+        if curl -s http://localhost:3000/api/v2/status &> /dev/null; then
+            log_info "Foreman is ready on localhost:3000"
+            break
+        fi
+        
+        # Check 127.0.0.1
+        if curl -s http://127.0.0.1:3000/api/v2/status &> /dev/null; then
+            log_info "Foreman is ready on 127.0.0.1:3000"
+            break
+        fi
+        
+        # Check container IP
+        if curl -s http://192.168.1.3:3000/api/v2/status &> /dev/null; then
+            log_info "Foreman is ready on 192.168.1.3:3000"
+            break
+        fi
+        
+        # Check if container is running
+        if ! docker ps | grep -q pxe_server; then
+            log_error "PXE server container is not running!"
+            return 1
+        fi
+        
+        # Check container logs for Foreman status
+        if docker logs pxe_server 2>&1 | grep -q "Foreman.*ready\|Foreman.*running"; then
+            log_info "Foreman appears to be running in container logs"
             break
         fi
         
