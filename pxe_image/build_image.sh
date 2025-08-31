@@ -10,7 +10,7 @@
 IMAGE_NAME="pxe_diagnostics"
 IMAGE_VERSION="1.0.0"
 IMAGE_SIZE="200M"
-ALPINE_VERSION="3.18"
+ALPINE_VERSION="3.19"
 WORK_DIR="./work"
 OUTPUT_DIR="./output"
 MOUNT_DIR="./mnt"
@@ -88,37 +88,38 @@ setup_directories() {
     mkdir -p "$WORK_DIR" "$OUTPUT_DIR" "$MOUNT_DIR"
 }
 
-# Download Alpine Linux with retry logic
+# Download Alpine Linux with retry logic and mirror fallbacks
 download_alpine() {
     log_info "Downloading Alpine Linux ${ALPINE_VERSION}..."
     
-    local alpine_url="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/alpine-minirootfs-${ALPINE_VERSION}.0-x86_64.tar.gz"
+    # Try multiple mirrors in order of preference
+    local mirrors=(
+        "https://dl-cdn.alpinelinux.org/alpine"
+        "https://mirror.alpinelinux.org/alpine"
+        "https://alpine.mirror.wearetriple.com/alpine"
+        "https://mirror.riseup.net/alpine"
+    )
+    
     local alpine_file="$WORK_DIR/alpine-minirootfs-${ALPINE_VERSION}.0-x86_64.tar.gz"
     
     if [ ! -f "$alpine_file" ]; then
-        local max_attempts=5
-        local attempt=1
         local success=false
         
-        while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
-            log_info "Attempt $attempt of $max_attempts to download Alpine Linux..."
+        for mirror in "${mirrors[@]}"; do
+            local alpine_url="${mirror}/v${ALPINE_VERSION}/releases/x86_64/alpine-minirootfs-${ALPINE_VERSION}.0-x86_64.tar.gz"
+            log_info "Trying mirror: $mirror"
             
             if wget --timeout=30 --tries=3 -O "$alpine_file" "$alpine_url"; then
-                log_info "Alpine Linux downloaded successfully!"
+                log_info "Alpine Linux downloaded successfully from $mirror!"
                 success=true
+                break
             else
-                log_warn "Download failed on attempt $attempt"
-                if [ $attempt -lt $max_attempts ]; then
-                    log_info "Waiting 15 seconds before retry..."
-                    sleep 15
-                fi
+                log_warn "Failed to download from $mirror"
             fi
-            
-            attempt=$((attempt + 1))
         done
         
         if [ "$success" = false ]; then
-            log_error "Failed to download Alpine Linux after $max_attempts attempts"
+            log_error "Failed to download Alpine Linux from all mirrors"
             return 1
         fi
     else
@@ -173,48 +174,38 @@ install_diagnostic_tools() {
         while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
             log_info "Attempt $attempt of $max_attempts to install packages..."
             
+            # Try to update package repositories
             if chroot "$MOUNT_DIR" apk update --no-cache; then
                 log_info "Package repository updated successfully"
                 
-                if chroot "$MOUNT_DIR" apk add --no-cache \
-                    lshw \
-                    hwinfo \
-                    dmidecode \
-                    smartmontools \
-                    hdparm \
-                    fio \
-                    memtester \
-                    stress-ng \
-                    sysbench \
-                    iperf3 \
-                    netperf \
-                    snmp-tools \
-                    lldpd \
-                    ethtool \
-                    ipmitool \
-                    lm-sensors \
-                    mdadm \
-                    bonnie++ \
-                    ioping \
-                    curl \
-                    wget \
-                    jq \
-                    python3 \
-                    bash \
-                    vim \
-                    htop \
-                    iotop \
-                    sysstat \
-                    lsof \
-                    strace \
-                    gcc \
-                    make \
-                    linux-headers; then
-                    
+                # Try to install packages in smaller groups for better success rate
+                local package_groups=(
+                    "lshw hwinfo dmidecode"
+                    "smartmontools hdparm fio memtester"
+                    "stress-ng sysbench iperf3 netperf"
+                    "snmp-tools lldpd ethtool ipmitool"
+                    "lm-sensors mdadm bonnie++ ioping"
+                    "curl wget jq python3"
+                    "bash vim htop iotop"
+                    "sysstat lsof strace"
+                    "gcc make linux-headers"
+                )
+                
+                local all_success=true
+                for group in "${package_groups[@]}"; do
+                    if chroot "$MOUNT_DIR" apk add --no-cache $group; then
+                        log_info "Package group installed: $group"
+                    else
+                        log_warn "Package group failed: $group"
+                        all_success=false
+                    fi
+                done
+                
+                if [ "$all_success" = true ]; then
                     log_info "All diagnostic tools installed successfully!"
                     success=true
                 else
-                    log_warn "Package installation failed on attempt $attempt"
+                    log_warn "Some package groups failed to install"
                 fi
             else
                 log_warn "Package repository update failed on attempt $attempt"
@@ -354,17 +345,33 @@ create_pxe_files() {
         return 0
     }
     
-    # Download kernel and initramfs with retries
-    local kernel_url="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot/vmlinuz-virt"
-    local initramfs_url="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot/initramfs-virt"
+    # Download kernel and initramfs with mirror fallbacks
+    local mirrors=(
+        "https://dl-cdn.alpinelinux.org/alpine"
+        "https://mirror.alpinelinux.org/alpine"
+        "https://alpine.mirror.wearetriple.com/alpine"
+        "https://mirror.riseup.net/alpine"
+    )
     
-    if ! download_with_retry "$kernel_url" "$OUTPUT_DIR/vmlinuz-virt" "kernel"; then
-        log_error "Failed to download kernel, cannot create PXE boot files"
-        return 1
-    fi
+    local success=false
+    for mirror in "${mirrors[@]}"; do
+        local kernel_url="${mirror}/v${ALPINE_VERSION}/releases/x86_64/netboot/vmlinuz-virt"
+        local initramfs_url="${mirror}/v${ALPINE_VERSION}/releases/x86_64/netboot/initramfs-virt"
+        
+        log_info "Trying mirror: $mirror for PXE boot files"
+        
+        if download_with_retry "$kernel_url" "$OUTPUT_DIR/vmlinuz-virt" "kernel" && \
+           download_with_retry "$initramfs_url" "$OUTPUT_DIR/initramfs-virt" "initramfs"; then
+            log_info "PXE boot files downloaded successfully from $mirror!"
+            success=true
+            break
+        else
+            log_warn "Failed to download PXE boot files from $mirror"
+        fi
+    done
     
-    if ! download_with_retry "$initramfs_url" "$OUTPUT_DIR/initramfs-virt" "initramfs"; then
-        log_error "Failed to download initramfs, cannot create PXE boot files"
+    if [ "$success" = false ]; then
+        log_error "Failed to download PXE boot files from all mirrors"
         return 1
     fi
     
