@@ -29,24 +29,42 @@ start_service() {
     local service_name=$1
     log_info "Starting $service_name..."
     
-    if systemctl is-active --quiet $service_name; then
-        log_info "$service_name is already running"
-    else
-        systemctl start $service_name
-        if systemctl is-active --quiet $service_name; then
-            log_info "$service_name started successfully"
-        else
-            log_error "Failed to start $service_name"
-            return 1
-        fi
-    fi
+    # In Docker container, we need to start services manually
+    case $service_name in
+        chronyd)
+            if [ -f /usr/sbin/chronyd ]; then
+                /usr/sbin/chronyd -d &
+                log_info "chronyd started in background"
+            fi
+            ;;
+        firewalld)
+            if [ -f /usr/sbin/firewalld ]; then
+                /usr/sbin/firewalld --nofork --nopid &
+                log_info "firewalld started in background"
+            fi
+            ;;
+        dhcpd)
+            if [ -f /usr/sbin/dhcpd ]; then
+                /usr/sbin/dhcpd -f -d &
+                log_info "dhcpd started in background"
+            fi
+            ;;
+        tftp)
+            if [ -f /usr/sbin/in.tftpd ]; then
+                /usr/sbin/in.tftpd -s /var/lib/tftpboot -l &
+                log_info "tftp started in background"
+            fi
+            ;;
+        *)
+            log_warn "Service $service_name not configured for Docker"
+            ;;
+    esac
 }
 
-# Function to enable a service
+# Function to enable a service (no-op in Docker)
 enable_service() {
     local service_name=$1
-    log_info "Enabling $service_name..."
-    systemctl enable $service_name
+    log_info "Service $service_name will be started manually in Docker"
 }
 
 # Main startup sequence
@@ -94,13 +112,13 @@ main() {
     # Display service status
     log_info "Service Status:"
     echo "=========================================="
-    systemctl status chronyd --no-pager -l
+    ps aux | grep chronyd | grep -v grep || echo "chronyd not running"
     echo "=========================================="
-    systemctl status firewalld --no-pager -l
+    ps aux | grep firewalld | grep -v grep || echo "firewalld not running"
     echo "=========================================="
-    systemctl status dhcpd --no-pager -l
+    ps aux | grep dhcpd | grep -v grep || echo "dhcpd not running"
     echo "=========================================="
-    systemctl status tftp --no-pager -l
+    ps aux | grep tftpd | grep -v grep || echo "tftp not running"
     echo "=========================================="
     
     log_info "PXE Server startup complete!"
@@ -111,7 +129,7 @@ main() {
     while true; do
         sleep 30
         # Check if critical services are still running
-        if ! systemctl is-active --quiet dhcpd || ! systemctl is-active --quiet tftp; then
+        if ! pgrep -f dhcpd > /dev/null || ! pgrep -f tftpd > /dev/null; then
             log_error "Critical services stopped. Restarting..."
             start_service dhcpd
             start_service tftp
