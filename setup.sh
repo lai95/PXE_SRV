@@ -141,7 +141,6 @@ RUN dnf update -y && \
         python3-devel \
         openssl \
         ca-certificates \
-        ntp \
         chrony \
         firewalld \
         dhcp-server \
