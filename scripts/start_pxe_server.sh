@@ -47,7 +47,9 @@ start_service() {
             if [ -f /usr/sbin/dhcpd ]; then
                 # Kill existing dhcpd process if running
                 pkill -f dhcpd 2>/dev/null || true
-                sleep 1
+                # Remove PID file if it exists
+                rm -f /var/run/dhcpd.pid
+                sleep 2
                 /usr/sbin/dhcpd -f -d &
                 log_info "dhcpd started in background"
             fi
@@ -56,7 +58,9 @@ start_service() {
             if [ -f /usr/sbin/in.tftpd ]; then
                 # Kill existing tftp process if running
                 pkill -f tftpd 2>/dev/null || true
-                sleep 1
+                # Remove PID file if it exists
+                rm -f /var/run/in.tftpd.pid
+                sleep 2
                 /usr/sbin/in.tftpd -s /var/lib/tftpboot -l &
                 log_info "tftp started in background"
             fi
@@ -180,11 +184,36 @@ main() {
     while true; do
         sleep 30
         # Check if critical services are still running using PID files
-        if [ ! -f /var/run/dhcpd.pid ] || [ ! -f /var/run/in.tftpd.pid ]; then
+        dhcpd_running=false
+        tftp_running=false
+        
+        # Check DHCP
+        if [ -f /var/run/dhcpd.pid ]; then
+            if kill -0 $(cat /var/run/dhcpd.pid) 2>/dev/null; then
+                dhcpd_running=true
+            else
+                # PID file exists but process is dead, remove it
+                rm -f /var/run/dhcpd.pid
+            fi
+        fi
+        
+        # Check TFTP
+        if [ -f /var/run/in.tftpd.pid ]; then
+            if kill -0 $(cat /var/run/in.tftpd.pid) 2>/dev/null; then
+                tftp_running=true
+            else
+                # PID file exists but process is dead, remove it
+                rm -f /var/run/in.tftpd.pid
+            fi
+        fi
+        
+        if [ "$dhcpd_running" = false ] || [ "$tftp_running" = false ]; then
             log_error "Critical services stopped. Restarting..."
             # Kill existing processes before restarting
             pkill -f dhcpd 2>/dev/null || true
             pkill -f tftpd 2>/dev/null || true
+            # Remove stale PID files
+            rm -f /var/run/dhcpd.pid /var/run/in.tftpd.pid
             sleep 2
             start_service dhcpd
             start_service tftp
