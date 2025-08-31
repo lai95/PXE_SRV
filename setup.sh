@@ -380,6 +380,12 @@ configure_foreman() {
                     log_info "Hostname set to: $(docker exec pxe_server hostname)"
                     log_info "FQDN should now be: $(docker exec pxe_server hostname -f)"
                     
+                    # Try to disable IPv6 to avoid reverse DNS issues
+                    log_info "Attempting to disable IPv6 to avoid reverse DNS issues..."
+                    docker exec pxe_server bash -c 'echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf' 2>/dev/null || true
+                    docker exec pxe_server bash -c 'echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.conf' 2>/dev/null || true
+                    docker exec pxe_server sysctl -p 2>/dev/null || true
+                    
                     # Use default configuration with minimal options
                     docker exec pxe_server foreman-installer --no-colors
                     log_info "Foreman installer completed, checking if service is now running..."
