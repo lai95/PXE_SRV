@@ -40,7 +40,7 @@ services:
     ports:
       - "5000:5000"  # API server
     volumes:
-      - foreman_reports:/var/lib/foreman-reports:ro
+      - foreman_reports:/var/lib/foreman-reports
       - main_program_logs:/var/log/main_program
     environment:
       - FLASK_ENV=development
