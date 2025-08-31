@@ -45,12 +45,18 @@ start_service() {
             ;;
         dhcpd)
             if [ -f /usr/sbin/dhcpd ]; then
+                # Kill existing dhcpd process if running
+                pkill -f dhcpd 2>/dev/null || true
+                sleep 1
                 /usr/sbin/dhcpd -f -d &
                 log_info "dhcpd started in background"
             fi
             ;;
         tftp)
             if [ -f /usr/sbin/in.tftpd ]; then
+                # Kill existing tftp process if running
+                pkill -f tftpd 2>/dev/null || true
+                sleep 1
                 /usr/sbin/in.tftpd -s /var/lib/tftpboot -l &
                 log_info "tftp started in background"
             fi
@@ -155,9 +161,13 @@ main() {
     log_info "Container is running. Press Ctrl+C to stop."
     while true; do
         sleep 30
-        # Check if critical services are still running
-        if ! pgrep -f dhcpd > /dev/null || ! pgrep -f tftpd > /dev/null; then
+        # Check if critical services are still running (using ps instead of pgrep)
+        if ! ps aux | grep -v grep | grep -q dhcpd || ! ps aux | grep -v grep | grep -q tftpd; then
             log_error "Critical services stopped. Restarting..."
+            # Kill existing processes before restarting
+            pkill -f dhcpd 2>/dev/null || true
+            pkill -f tftpd 2>/dev/null || true
+            sleep 2
             start_service dhcpd
             start_service tftp
         fi
