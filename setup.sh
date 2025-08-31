@@ -342,9 +342,20 @@ configure_foreman() {
         fi
         
         # Check container logs for Foreman status
-        if docker logs pxe_server 2>&1 | grep -q "Foreman.*ready\|Foreman.*running"; then
+        log_info "Checking container logs for Foreman status..."
+        if docker logs pxe_server 2>&1 | grep -q "Foreman.*ready\|Foreman.*running\|foreman.*started"; then
             log_info "Foreman appears to be running in container logs"
             break
+        fi
+        
+        # Check if Foreman installer completed
+        if docker exec pxe_server test -f /etc/foreman/foreman.yml 2>/dev/null; then
+            log_info "Foreman configuration file found, checking service status..."
+            if docker exec pxe_server systemctl is-active --quiet foreman 2>/dev/null || \
+               docker exec pxe_server pgrep -f foreman >/dev/null 2>&1; then
+                log_info "Foreman service is running in container"
+                break
+            fi
         fi
         
         log_info "Waiting for Foreman... (attempt $attempt/$max_attempts)"
