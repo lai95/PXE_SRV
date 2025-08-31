@@ -567,7 +567,7 @@ subnet 192.168.1.0 netmask 255.255.255.0 {
 EOF'
         
         # Restart DHCP server with new configuration
-        docker exec pxe_server pkill -f dhcpd
+        docker exec pxe_server bash -c 'ps aux | grep dhcpd | grep -v grep | awk "{print \$2}" | xargs kill -9 2>/dev/null || true'
         docker exec pxe_server /usr/sbin/dhcpd -f -d &
         
         log_info "DHCP configuration updated for iPXE support"
