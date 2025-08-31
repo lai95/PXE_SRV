@@ -61,8 +61,15 @@ start_service() {
                 # Remove PID file if it exists
                 rm -f /var/run/in.tftpd.pid
                 sleep 2
-                /usr/sbin/in.tftpd -s /var/lib/tftpboot -l &
-                log_info "tftp started in background"
+                # Start TFTP with explicit PID file
+                /usr/sbin/in.tftpd -s /var/lib/tftpboot -l -p /var/run/in.tftpd.pid &
+                # Wait a moment for PID file to be created
+                sleep 1
+                if [ -f /var/run/in.tftpd.pid ]; then
+                    log_info "tftp started in background (PID: $(cat /var/run/in.tftpd.pid))"
+                else
+                    log_warn "tftp started but PID file not created"
+                fi
             fi
             ;;
         *)
@@ -113,6 +120,7 @@ main() {
     
     # Configure services first
     configure_dhcp
+    setup_tftp
     
     # Start essential services
     start_service chronyd
