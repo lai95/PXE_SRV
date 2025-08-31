@@ -62,7 +62,7 @@ start_service() {
                 rm -f /var/run/in.tftpd.pid
                 sleep 2
                 # Start TFTP in foreground mode but redirect output and use setsid for proper daemonization
-                setsid /usr/sbin/in.tftpd -s /var/lib/tftpboot -l > /dev/null 2>&1 &
+                setsid /usr/sbin/in.tftpd -s /var/lib/tftpboot -l -a 0.0.0.0:69 > /dev/null 2>&1 &
                 TFTP_PID=$!
                 # Create PID file manually
                 echo $TFTP_PID > /var/run/in.tftpd.pid

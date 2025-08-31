@@ -602,6 +602,16 @@ EOF'
             log_warn "DHCP server may not be running - check manually"
         fi
         
+        # Verify TFTP is properly bound to IPv4
+        sleep 2
+        if docker exec pxe_server bash -c 'netstat -tulpn | grep "0.0.0.0:69" >/dev/null 2>&1'; then
+            log_info "TFTP server properly bound to IPv4"
+        else
+            log_warn "TFTP server not bound to IPv4 - restarting with proper binding"
+            docker exec pxe_server bash -c 'pkill -f tftp 2>/dev/null || killall tftp 2>/dev/null || true'
+            docker exec pxe_server bash -c 'sleep 2 && in.tftpd -l -s /var/lib/tftpboot -a 0.0.0.0:69 &'
+        fi
+        
         log_info "DHCP configuration updated for iPXE support"
         log_info "TFTP directory contents:"
         docker exec pxe_server ls -la /var/lib/tftpboot/
