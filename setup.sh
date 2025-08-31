@@ -314,7 +314,10 @@ configure_foreman() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        if curl -s http://localhost:3000/api/v2/status &> /dev/null; then
+        # Try multiple possible Foreman URLs
+        if curl -s http://localhost:3000/api/v2/status &> /dev/null || \
+           curl -s http://127.0.0.1:3000/api/v2/status &> /dev/null || \
+           curl -s http://192.168.1.3:3000/api/v2/status &> /dev/null; then
             log_info "Foreman is ready"
             break
         fi
