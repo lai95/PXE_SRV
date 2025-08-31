@@ -532,6 +532,24 @@ boot
 :exit
 exit
 EOF'
+
+        # Create a simple test iPXE file for debugging
+        docker exec pxe_server bash -c 'cat > /var/lib/tftpboot/test.ipxe << EOF
+#!ipxe
+echo iPXE test file loaded successfully!
+echo Current IP: \${net0/ip}
+echo Gateway: \${net0/gateway}
+echo Boot file: \${filename}
+echo Next server: \${next-server}
+echo TFTP server: \${tftp-server}
+echo
+echo Loading kernel...
+kernel vmlinuz-virt
+echo Loading initramfs...
+initrd initramfs-virt
+echo Booting...
+boot
+EOF'
         
         log_info "PXE boot files created successfully!"
         
@@ -552,17 +570,19 @@ subnet 192.168.1.0 netmask 255.255.255.0 {
     option routers 192.168.1.1;
     option domain-name-servers 192.168.1.2;
     
-    # iPXE Configuration
+    # iPXE Configuration - serve menu.ipxe for iPXE clients
     if exists user-class and option user-class = "iPXE" {
         filename "menu.ipxe";
+        next-server 192.168.1.2;
     } else {
+        # Traditional PXE clients get pxelinux.0
         filename "pxelinux.0";
         next-server 192.168.1.2;
     }
     
-    # Boot file for traditional PXE
-    option bootfile-name "pxelinux.0";
+    # Additional PXE options
     option tftp-server-name "192.168.1.2";
+    option bootfile-name "pxelinux.0";
 }
 EOF'
         
