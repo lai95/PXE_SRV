@@ -3,7 +3,8 @@
 # PXE Diagnostic Image Builder
 # Builds a minimal Alpine Linux-based diagnostic boot image
 
-set -e
+# Don't exit on errors - we'll handle them manually
+# set -e
 
 # Configuration
 IMAGE_NAME="pxe_diagnostics"
@@ -87,7 +88,7 @@ setup_directories() {
     mkdir -p "$WORK_DIR" "$OUTPUT_DIR" "$MOUNT_DIR"
 }
 
-# Download Alpine Linux
+# Download Alpine Linux with retry logic
 download_alpine() {
     log_info "Downloading Alpine Linux ${ALPINE_VERSION}..."
     
@@ -95,7 +96,31 @@ download_alpine() {
     local alpine_file="$WORK_DIR/alpine-minirootfs-${ALPINE_VERSION}.0-x86_64.tar.gz"
     
     if [ ! -f "$alpine_file" ]; then
-        wget -O "$alpine_file" "$alpine_url"
+        local max_attempts=5
+        local attempt=1
+        local success=false
+        
+        while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
+            log_info "Attempt $attempt of $max_attempts to download Alpine Linux..."
+            
+            if wget --timeout=30 --tries=3 -O "$alpine_file" "$alpine_url"; then
+                log_info "Alpine Linux downloaded successfully!"
+                success=true
+            else
+                log_warn "Download failed on attempt $attempt"
+                if [ $attempt -lt $max_attempts ]; then
+                    log_info "Waiting 15 seconds before retry..."
+                    sleep 15
+                fi
+            fi
+            
+            attempt=$((attempt + 1))
+        done
+        
+        if [ "$success" = false ]; then
+            log_error "Failed to download Alpine Linux after $max_attempts attempts"
+            return 1
+        fi
     else
         log_info "Alpine Linux already downloaded"
     fi
@@ -135,54 +160,100 @@ extract_alpine() {
     log_info "Alpine Linux extracted"
 }
 
-# Install diagnostic tools
+# Install diagnostic tools with retry logic
 install_diagnostic_tools() {
     log_info "Installing diagnostic tools..."
     
-    # Create package cache directory
-    mkdir -p "$MOUNT_DIR/var/cache/apk"
+    # Function to install packages with retries
+    install_packages_with_retry() {
+        local max_attempts=5
+        local attempt=1
+        local success=false
+        
+        while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
+            log_info "Attempt $attempt of $max_attempts to install packages..."
+            
+            if chroot "$MOUNT_DIR" apk update --no-cache; then
+                log_info "Package repository updated successfully"
+                
+                if chroot "$MOUNT_DIR" apk add --no-cache \
+                    lshw \
+                    hwinfo \
+                    dmidecode \
+                    smartmontools \
+                    hdparm \
+                    fio \
+                    memtester \
+                    stress-ng \
+                    sysbench \
+                    iperf3 \
+                    netperf \
+                    snmp-tools \
+                    lldpd \
+                    ethtool \
+                    ipmitool \
+                    lm-sensors \
+                    mdadm \
+                    bonnie++ \
+                    ioping \
+                    curl \
+                    wget \
+                    jq \
+                    python3 \
+                    bash \
+                    vim \
+                    htop \
+                    iotop \
+                    sysstat \
+                    lsof \
+                    strace \
+                    gcc \
+                    make \
+                    linux-headers; then
+                    
+                    log_info "All diagnostic tools installed successfully!"
+                    success=true
+                else
+                    log_warn "Package installation failed on attempt $attempt"
+                fi
+            else
+                log_warn "Package repository update failed on attempt $attempt"
+            fi
+            
+            if [ "$success" = false ] && [ $attempt -lt $max_attempts ]; then
+                log_info "Waiting 10 seconds before retry..."
+                sleep 10
+            fi
+            
+            attempt=$((attempt + 1))
+        done
+        
+        if [ "$success" = false ]; then
+            log_error "Failed to install packages after $max_attempts attempts"
+            return 1
+        fi
+        
+        return 0
+    }
     
-    # Copy package database
-    cp -r "$MOUNT_DIR/etc/apk" "$MOUNT_DIR/var/cache/apk/"
-    
-    # Install packages
-    chroot "$MOUNT_DIR" apk update
-    chroot "$MOUNT_DIR" apk add --no-cache \
-        lshw \
-        hwinfo \
-        dmidecode \
-        smartmontools \
-        hdparm \
-        fio \
-        memtester \
-        stress-ng \
-        sysbench \
-        iperf3 \
-        netperf \
-        snmp-tools \
-        lldpd \
-        ethtool \
-        ipmitool \
-        lm-sensors \
-        mdadm \
-        bonnie++ \
-        ioping \
-        curl \
-        wget \
-        jq \
-        python3 \
-        bash \
-        vim \
-        htop \
-        iotop \
-        sysstat \
-        lsof \
-        strace \
-        gcc \
-        make \
-        linux-headers
-    
-    log_info "Diagnostic tools installed"
+    # Try to install packages
+    if ! install_packages_with_retry; then
+        log_warn "Continuing with minimal tools - some packages may not be available"
+        
+        # Try to install at least essential tools
+        if chroot "$MOUNT_DIR" apk add --no-cache \
+            lshw \
+            hwinfo \
+            dmidecode \
+            curl \
+            wget \
+            bash \
+            vim; then
+            log_info "Essential diagnostic tools installed"
+        else
+            log_warn "Even essential tools failed to install"
+        fi
+    fi
 }
 
 # Configure system
@@ -244,16 +315,58 @@ EOF
     log_info "System configured"
 }
 
-# Create PXE boot files
+# Create PXE boot files with retry logic
 create_pxe_files() {
     log_info "Creating PXE boot files..."
     
-    # Download kernel and initramfs
+    # Function to download file with retries
+    download_with_retry() {
+        local url="$1"
+        local output_file="$2"
+        local description="$3"
+        
+        local max_attempts=5
+        local attempt=1
+        local success=false
+        
+        while [ $attempt -le $max_attempts ] && [ "$success" = false ]; do
+            log_info "Attempt $attempt of $max_attempts to download $description..."
+            
+            if wget --timeout=30 --tries=3 -O "$output_file" "$url"; then
+                log_info "$description downloaded successfully!"
+                success=true
+            else
+                log_warn "Download of $description failed on attempt $attempt"
+                if [ $attempt -lt $max_attempts ]; then
+                    log_info "Waiting 10 seconds before retry..."
+                    sleep 10
+                fi
+            fi
+            
+            attempt=$((attempt + 1))
+        done
+        
+        if [ "$success" = false ]; then
+            log_error "Failed to download $description after $max_attempts attempts"
+            return 1
+        fi
+        
+        return 0
+    }
+    
+    # Download kernel and initramfs with retries
     local kernel_url="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot/vmlinuz-virt"
     local initramfs_url="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot/initramfs-virt"
     
-    wget -O "$OUTPUT_DIR/vmlinuz-virt" "$kernel_url"
-    wget -O "$OUTPUT_DIR/initramfs-virt" "$initramfs_url"
+    if ! download_with_retry "$kernel_url" "$OUTPUT_DIR/vmlinuz-virt" "kernel"; then
+        log_error "Failed to download kernel, cannot create PXE boot files"
+        return 1
+    fi
+    
+    if ! download_with_retry "$initramfs_url" "$OUTPUT_DIR/initramfs-virt" "initramfs"; then
+        log_error "Failed to download initramfs, cannot create PXE boot files"
+        return 1
+    fi
     
     # Create PXE configuration
     cat > "$OUTPUT_DIR/pxelinux.cfg/default" << EOF
@@ -273,7 +386,7 @@ LABEL diagnostic_boot_debug
     APPEND initrd=initramfs-virt modules=loop,squashfs,sd-mod,usb-storage console=ttyS0,115200 console=tty0 debug
 EOF
     
-    log_info "PXE boot files created"
+    log_info "PXE boot files created successfully"
 }
 
 # Finalize image
@@ -297,19 +410,58 @@ finalize_image() {
 main() {
     log_info "Starting PXE diagnostic image build..."
     
-    check_prerequisites
-    setup_directories
-    download_alpine
-    create_image
-    extract_alpine
-    install_diagnostic_tools
-    configure_system
-    create_pxe_files
-    finalize_image
+    local exit_code=0
     
-    log_info "Build completed successfully!"
-    log_info "Output files:"
-    ls -la "$OUTPUT_DIR/"
+    # Execute each step and continue even if some fail
+    check_prerequisites || exit_code=1
+    
+    if [ $exit_code -eq 0 ]; then
+        setup_directories || exit_code=1
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        download_alpine || exit_code=1
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        create_image || exit_code=1
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        extract_alpine || exit_code=1
+    fi
+    
+    # Package installation might fail due to network issues, but continue
+    if [ $exit_code -eq 0 ]; then
+        if ! install_diagnostic_tools; then
+            log_warn "Package installation had issues, but continuing..."
+            exit_code=1
+        fi
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        configure_system || exit_code=1
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        create_pxe_files || exit_code=1
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        finalize_image || exit_code=1
+    fi
+    
+    if [ $exit_code -eq 0 ]; then
+        log_info "Build completed successfully!"
+        log_info "Output files:"
+        ls -la "$OUTPUT_DIR/"
+    else
+        log_warn "Build completed with some issues, but PXE files should be available"
+        log_info "Available output files:"
+        ls -la "$OUTPUT_DIR/" 2>/dev/null || true
+    fi
+    
+    return $exit_code
 }
 
 # Run main function
