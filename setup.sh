@@ -455,6 +455,42 @@ build_pxe_image() {
     fi
     
     log_info "PXE image build process initiated"
+    
+    # Wait for build to complete and create PXE boot files
+    log_info "Waiting for PXE image build to complete..."
+    sleep 10
+    
+    # Create PXE boot files
+    log_info "Creating PXE boot files..."
+    if [ -f "pxe_image/work/vmlinuz" ] && [ -f "pxe_image/work/initrd.img" ]; then
+        log_info "PXE image files found, creating boot configuration..."
+        
+        # Copy kernel and initrd to TFTP directory
+        docker exec pxe_server mkdir -p /var/lib/tftpboot
+        docker cp pxe_image/work/vmlinuz pxe_server:/var/lib/tftpboot/
+        docker cp pxe_image/work/initrd.img pxe_server:/var/lib/tftpboot/
+        
+        # Create PXE boot configuration
+        docker exec pxe_server bash -c 'cat > /var/lib/tftpboot/pxelinux.cfg/default << EOF
+DEFAULT diagnostic
+PROMPT 0
+TIMEOUT 300
+
+LABEL diagnostic
+    KERNEL vmlinuz
+    APPEND initrd=initrd.img root=/dev/ram0 rw console=ttyS0,115200 console=tty0
+    TEXT HELP
+        PXE Diagnostic System
+    ENDTEXT
+EOF'
+        
+        log_info "PXE boot files created successfully!"
+        log_info "TFTP directory contents:"
+        docker exec pxe_server ls -la /var/lib/tftpboot/
+    else
+        log_warn "PXE image files not found, manual build required"
+        log_info "Run: cd pxe_image && sudo ./build_image.sh"
+    fi
 }
 
 # Setup monitoring
