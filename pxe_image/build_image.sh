@@ -10,7 +10,7 @@
 IMAGE_NAME="pxe_diagnostics"
 IMAGE_VERSION="1.0.0"
 IMAGE_SIZE="200M"
-ALPINE_VERSION="3.19"
+ALPINE_VERSION="3.18"
 WORK_DIR="./work"
 OUTPUT_DIR="./output"
 MOUNT_DIR="./mnt"
@@ -243,17 +243,76 @@ install_diagnostic_tools() {
             log_info "Essential diagnostic tools installed"
         else
             log_warn "Even essential tools failed to install"
+            log_info "Creating minimal working system with built-in tools"
+            create_minimal_system
         fi
     fi
+}
+
+# Create minimal working system without external packages
+create_minimal_system() {
+    log_info "Setting up minimal working system..."
+    
+    # Create essential directories
+    mkdir -p "$MOUNT_DIR/opt/diagnostics/bin"
+    mkdir -p "$MOUNT_DIR/opt/diagnostics/lib"
+    
+    # Create a basic diagnostic script that works with minimal tools
+    cat > "$MOUNT_DIR/opt/diagnostics/bin/run_diagnostics.sh" << 'EOF'
+#!/bin/sh
+# Minimal diagnostic script for Alpine Linux
+
+echo "=== Minimal PXE Diagnostic System ==="
+echo "System: $(uname -a)"
+echo "Date: $(date)"
+echo "Uptime: $(uptime 2>/dev/null || echo 'N/A')"
+echo "Memory: $(free -h 2>/dev/null || cat /proc/meminfo | grep MemTotal || echo 'N/A')"
+echo "Disk: $(df -h 2>/dev/null || echo 'N/A')"
+echo "Network: $(ip addr 2>/dev/null || ifconfig 2>/dev/null || echo 'N/A')"
+echo "Processes: $(ps aux 2>/dev/null || echo 'N/A')"
+echo "=== Diagnostic Complete ==="
+EOF
+    
+    chmod +x "$MOUNT_DIR/opt/diagnostics/bin/run_diagnostics.sh"
+    
+    # Create basic system configuration
+    cat > "$MOUNT_DIR/etc/inittab" << 'EOF'
+::sysinit:/sbin/openrc sysinit
+::respawn:/sbin/openrc default
+::shutdown:/sbin/openrc shutdown
+EOF
+    
+    # Create basic network configuration
+    cat > "$MOUNT_DIR/etc/network/interfaces" << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+    
+    # Create basic passwd file
+    echo "root:x:0:0:root:/root:/bin/sh" > "$MOUNT_DIR/etc/passwd"
+    echo "daemon:x:1:1:daemon:/usr/sbin:/bin/false" >> "$MOUNT_DIR/etc/passwd"
+    echo "bin:x:2:2:bin:/bin:/bin/false" >> "$MOUNT_DIR/etc/passwd"
+    
+    # Create basic group file
+    echo "root:x:0:" > "$MOUNT_DIR/etc/group"
+    echo "daemon:x:1:" >> "$MOUNT_DIR/etc/group"
+    echo "bin:x:2:" >> "$MOUNT_DIR/etc/group"
+    
+    log_info "Minimal system created successfully"
 }
 
 # Configure system
 configure_system() {
     log_info "Configuring system..."
     
-    # Copy diagnostic scripts
-    cp -r ../diagnostics/* "$MOUNT_DIR/opt/diagnostics/"
-    chmod +x "$MOUNT_DIR/opt/diagnostics/bin/*"
+    # Copy diagnostic scripts if they exist, otherwise use minimal ones
+    if [ -d "../diagnostics" ]; then
+        cp -r ../diagnostics/* "$MOUNT_DIR/opt/diagnostics/"
+        chmod +x "$MOUNT_DIR/opt/diagnostics/bin/*" 2>/dev/null || true
+    fi
     
     # Create init script
     cat > "$MOUNT_DIR/etc/init.d/diagnostics" << 'EOF'
@@ -283,8 +342,8 @@ EOF
     
     chmod +x "$MOUNT_DIR/etc/init.d/diagnostics"
     
-    # Enable diagnostic service
-    chroot "$MOUNT_DIR" rc-update add diagnostics default
+    # Try to enable diagnostic service (may fail in minimal system)
+    chroot "$MOUNT_DIR" rc-update add diagnostics default 2>/dev/null || log_warn "Could not enable diagnostic service"
     
     # Configure networking
     cat > "$MOUNT_DIR/etc/network/interfaces" << 'EOF'
@@ -295,13 +354,19 @@ auto eth0
 iface eth0 inet dhcp
 EOF
     
-    # Configure SSH for report upload
-    chroot "$MOUNT_DIR" apk add --no-cache openssh
-    chroot "$MOUNT_DIR" ssh-keygen -A
-    
-    # Create upload user
-    chroot "$MOUNT_DIR" adduser -D -s /bin/bash upload
-    chroot "$MOUNT_DIR" echo "upload:upload123" | chpasswd
+    # Try to configure SSH for report upload (may fail in minimal system)
+    if chroot "$MOUNT_DIR" apk add --no-cache openssh 2>/dev/null; then
+        chroot "$MOUNT_DIR" ssh-keygen -A 2>/dev/null || log_warn "Could not generate SSH keys"
+        
+        # Create upload user
+        if chroot "$MOUNT_DIR" adduser -D -s /bin/sh upload 2>/dev/null; then
+            chroot "$MOUNT_DIR" echo "upload:upload123" | chpasswd 2>/dev/null || log_warn "Could not set upload user password"
+        else
+            log_warn "Could not create upload user"
+        fi
+    else
+        log_warn "SSH not available in minimal system"
+    fi
     
     log_info "System configured"
 }
