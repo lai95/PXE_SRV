@@ -479,13 +479,13 @@ build_pxe_image() {
     
     # Create PXE boot files
     log_info "Creating PXE boot files..."
-    if [ -f "pxe_image/work/vmlinuz" ] && [ -f "pxe_image/work/initrd.img" ]; then
+    if [ -f "pxe_image/output/vmlinuz-virt" ] && [ -f "pxe_image/output/initramfs-virt" ]; then
         log_info "PXE image files found, creating boot configuration..."
         
-        # Copy kernel and initrd to TFTP directory
+        # Copy kernel and initramfs to TFTP directory
         docker exec pxe_server mkdir -p /var/lib/tftpboot
-        docker cp pxe_image/work/vmlinuz pxe_server:/var/lib/tftpboot/
-        docker cp pxe_image/work/initrd.img pxe_server:/var/lib/tftpboot/
+        docker cp pxe_image/output/vmlinuz-virt pxe_server:/var/lib/tftpboot/
+        docker cp pxe_image/output/initramfs-virt pxe_server:/var/lib/tftpboot/
         
         # Create PXE boot configuration
         docker exec pxe_server bash -c 'cat > /var/lib/tftpboot/pxelinux.cfg/default << EOF
@@ -494,8 +494,8 @@ PROMPT 0
 TIMEOUT 300
 
 LABEL diagnostic
-    KERNEL vmlinuz
-    APPEND initrd=initrd.img root=/dev/ram0 rw console=ttyS0,115200 console=tty0
+    KERNEL vmlinuz-virt
+    APPEND initrd=initramfs-virt root=/dev/ram0 rw console=ttyS0,115200 console=tty0
     TEXT HELP
         PXE Diagnostic System
     ENDTEXT
