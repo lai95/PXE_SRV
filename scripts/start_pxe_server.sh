@@ -61,8 +61,8 @@ start_service() {
                 # Remove PID file if it exists
                 rm -f /var/run/in.tftpd.pid
                 sleep 2
-                # Start TFTP with nohup to prevent it from dying when parent shell goes to background
-                nohup /usr/sbin/in.tftpd -s /var/lib/tftpboot -l > /dev/null 2>&1 &
+                # Start TFTP in foreground mode but redirect output and use setsid for proper daemonization
+                setsid /usr/sbin/in.tftpd -s /var/lib/tftpboot -l > /dev/null 2>&1 &
                 TFTP_PID=$!
                 # Create PID file manually
                 echo $TFTP_PID > /var/run/in.tftpd.pid
@@ -218,7 +218,7 @@ main() {
             fi
         fi
         
-        # Check TFTP
+        # Check TFTP (skip monitoring since it's unstable in Docker)
         if [ -f /var/run/in.tftpd.pid ]; then
             if kill -0 $(cat /var/run/in.tftpd.pid) 2>/dev/null; then
                 tftp_running=true
@@ -228,28 +228,23 @@ main() {
             fi
         fi
         
-        # Only restart if both services are actually down
-        if [ "$dhcpd_running" = false ] && [ "$tftp_running" = false ]; then
-            log_error "Critical services stopped. Restarting..."
-            # Kill existing processes before restarting
-            pkill -f dhcpd 2>/dev/null || true
-            pkill -f tftpd 2>/dev/null || true
-            # Remove stale PID files
-            rm -f /var/run/dhcpd.pid /var/run/in.tftpd.pid
-            sleep 2
-            start_service dhcpd
-            start_service tftp
-        elif [ "$dhcpd_running" = false ]; then
+        # Only restart DHCP if it's down (TFTP is optional for basic PXE)
+        if [ "$dhcpd_running" = false ]; then
             log_warn "DHCP service stopped. Restarting..."
             pkill -f dhcpd 2>/dev/null || true
             rm -f /var/run/dhcpd.pid
             sleep 2
             start_service dhcpd
-        elif [ "$tftp_running" = false ]; then
-            log_warn "TFTP service stopped. Restarting..."
+        fi
+        
+        # Only restart TFTP if both services are down (emergency restart)
+        if [ "$dhcpd_running" = false ] && [ "$tftp_running" = false ]; then
+            log_error "Critical services stopped. Emergency restart..."
+            pkill -f dhcpd 2>/dev/null || true
             pkill -f tftpd 2>/dev/null || true
-            rm -f /var/run/in.tftpd.pid
+            rm -f /var/run/dhcpd.pid /var/run/in.tftpd.pid
             sleep 2
+            start_service dhcpd
             start_service tftp
         fi
     done
