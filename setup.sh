@@ -124,7 +124,6 @@ RUN dnf update -y && \
     dnf install -y epel-release && \
     dnf install -y \
         wget \
-        curl \
         vim \
         htop \
         net-tools \
