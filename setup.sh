@@ -541,16 +541,16 @@ default-lease-time 600;
 max-lease-time 7200;
 authoritative;
 
+# PXE Boot Configuration - must be defined globally
+option space pxelinux;
+option pxelinux.magic code 208 = string;
+option pxelinux.reboot-time code 209 = unsigned integer 32;
+option pxelinux.menu code 16 = text;
+
 subnet 192.168.1.0 netmask 255.255.255.0 {
     range 192.168.1.100 192.168.1.200;
     option routers 192.168.1.1;
     option domain-name-servers 192.168.1.1;
-    
-    # PXE Boot Configuration
-    option space pxelinux;
-    option pxelinux.magic code 208 = string;
-    option pxelinux.reboot-time code 209 = unsigned integer 32;
-    option pxelinux.menu code 16 = text;
     
     # iPXE Configuration
     if exists user-class and option user-class = "iPXE" {
