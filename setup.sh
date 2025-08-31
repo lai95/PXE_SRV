@@ -365,7 +365,8 @@ configure_foreman() {
                 log_info "Attempting to run foreman-installer..."
                 if docker exec pxe_server foreman-installer --help &>/dev/null; then
                     log_info "Running foreman-installer to configure Foreman..."
-                    docker exec pxe_server foreman-installer --foreman-admin-password=admin123 --foreman-admin-username=admin --foreman-server-name=pxe-server.local
+                    # Use default configuration - foreman-installer will prompt for admin password
+                    docker exec pxe_server foreman-installer --no-colors --quiet
                     log_info "Foreman installer completed, checking if service is now running..."
                     sleep 10
                     if docker exec pxe_server test -f /etc/foreman/foreman.yml; then
