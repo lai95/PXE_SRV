@@ -67,13 +67,45 @@ enable_service() {
     log_info "Service $service_name will be started manually in Docker"
 }
 
+# Function to configure DHCP
+configure_dhcp() {
+    log_info "Configuring DHCP server..."
+    
+    # Create DHCP configuration
+    cat > /etc/dhcp/dhcpd.conf << 'EOF'
+# DHCP Server Configuration for PXE
+default-lease-time 600;
+max-lease-time 7200;
+
+# PXE Network Configuration
+subnet 192.168.1.0 netmask 255.255.255.0 {
+    range 192.168.1.100 192.168.1.200;
+    option routers 192.168.1.1;
+    option domain-name-servers 8.8.8.8, 8.8.4.4;
+    option broadcast-address 192.168.1.255;
+    
+    # PXE Boot Configuration
+    filename "pxelinux.0";
+    next-server 192.168.1.2;
+    
+    # Allow booting
+    allow booting;
+    allow bootp;
+}
+EOF
+    
+    log_info "DHCP configuration created"
+}
+
 # Main startup sequence
 main() {
     log_info "Starting PXE Server..."
     
+    # Configure services first
+    configure_dhcp
+    
     # Start essential services
     start_service chronyd
-    start_service firewalld
     start_service dhcpd
     start_service tftp
     
@@ -83,14 +115,9 @@ main() {
     enable_service dhcpd
     enable_service tftp
     
-    # Configure firewall rules
-    log_info "Configuring firewall..."
-    firewall-cmd --permanent --add-service=dhcp
-    firewall-cmd --permanent --add-service=tftp
-    firewall-cmd --permanent --add-service=http
-    firewall-cmd --permanent --add-service=https
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --reload
+    # Configure firewall rules (skip in Docker to avoid DBUS issues)
+    log_info "Firewall configuration skipped in Docker container"
+    log_info "Ports will be managed by Docker port mappings"
     
     # Start Foreman services if available
     if command -v foreman-installer &> /dev/null; then
