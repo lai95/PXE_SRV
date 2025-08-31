@@ -145,13 +145,31 @@ main() {
     # Display service status
     log_info "Service Status:"
     echo "=========================================="
-    ps aux | grep chronyd | grep -v grep || echo "chronyd not running"
+    # Use basic commands available in minimal images
+    if [ -f /proc/1/comm ]; then
+        for proc in /proc/*/comm; do
+            if grep -q chronyd "$proc" 2>/dev/null; then
+                echo "chronyd is running"
+                break
+            fi
+        done
+    else
+        echo "chronyd status unknown"
+    fi
     echo "=========================================="
-    ps aux | grep firewalld | grep -v grep || echo "firewalld not running"
+    echo "firewalld not running (disabled in Docker)"
     echo "=========================================="
-    ps aux | grep dhcpd | grep -v grep || echo "dhcpd not running"
+    if [ -f /var/run/dhcpd.pid ]; then
+        echo "dhcpd is running (PID: $(cat /var/run/dhcpd.pid))"
+    else
+        echo "dhcpd not running"
+    fi
     echo "=========================================="
-    ps aux | grep tftpd | grep -v grep || echo "tftp not running"
+    if [ -f /var/run/in.tftpd.pid ]; then
+        echo "tftp is running (PID: $(cat /var/run/in.tftpd.pid))"
+    else
+        echo "tftp not running"
+    fi
     echo "=========================================="
     
     log_info "PXE Server startup complete!"
@@ -161,8 +179,8 @@ main() {
     log_info "Container is running. Press Ctrl+C to stop."
     while true; do
         sleep 30
-        # Check if critical services are still running (using ps instead of pgrep)
-        if ! ps aux | grep -v grep | grep -q dhcpd || ! ps aux | grep -v grep | grep -q tftpd; then
+        # Check if critical services are still running using PID files
+        if [ ! -f /var/run/dhcpd.pid ] || [ ! -f /var/run/in.tftpd.pid ]; then
             log_error "Critical services stopped. Restarting..."
             # Kill existing processes before restarting
             pkill -f dhcpd 2>/dev/null || true
