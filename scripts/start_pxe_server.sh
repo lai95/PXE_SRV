@@ -85,22 +85,43 @@ enable_service() {
 configure_dhcp() {
     log_info "Configuring DHCP server..."
     
-    # Create DHCP configuration
+    # Create DHCP configuration with iPXE support
     cat > /etc/dhcp/dhcpd.conf << 'EOF'
 # DHCP Server Configuration for PXE
 default-lease-time 600;
 max-lease-time 7200;
+authoritative;
+
+# PXE Boot Configuration - must be defined globally
+option space pxelinux;
+option pxelinux.magic code 208 = string;
+option pxelinux.reboot-time code 209 = unsigned integer 32;
+option pxelinux.menu code 16 = text;
 
 # PXE Network Configuration
 subnet 192.168.1.0 netmask 255.255.255.0 {
     range 192.168.1.100 192.168.1.200;
     option routers 192.168.1.1;
-    option domain-name-servers 8.8.8.8, 8.8.4.4;
+    option domain-name-servers 192.168.1.2;
     option broadcast-address 192.168.1.255;
     
-    # PXE Boot Configuration
-    filename "pxelinux.0";
-    next-server 192.168.1.2;
+    # iPXE Configuration - detect iPXE clients more reliably
+    if exists user-class and option user-class = "iPXE" {
+        filename "menu.ipxe";
+        next-server 192.168.1.2;
+    } elsif option vendor-class-identifier = "PXEClient:Arch:00000:UNDI:002001" {
+        # Traditional PXE clients get pxelinux.0
+        filename "pxelinux.0";
+        next-server 192.168.1.2;
+    } else {
+        # Default to iPXE for modern clients
+        filename "menu.ipxe";
+        next-server 192.168.1.2;
+    }
+    
+    # Additional PXE options
+    option tftp-server-name "192.168.1.2";
+    option bootfile-name "pxelinux.0";
     
     # Allow booting
     allow booting;
@@ -108,7 +129,7 @@ subnet 192.168.1.0 netmask 255.255.255.0 {
 }
 EOF
     
-    log_info "DHCP configuration created"
+    log_info "DHCP configuration created with iPXE support"
 }
 
 # Function to setup TFTP directory
