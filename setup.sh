@@ -444,7 +444,24 @@ build_pxe_image() {
         if [ "$EUID" -eq 0 ]; then
             log_info "Building PXE image as root..."
             cd pxe_image
-            ./build_image.sh
+            log_info "Starting PXE image build - this may take several minutes..."
+            
+            # Run build script and capture its PID
+            ./build_image.sh &
+            BUILD_PID=$!
+            
+            # Wait for build to complete
+            log_info "Waiting for PXE image build to complete (PID: $BUILD_PID)..."
+            wait $BUILD_PID
+            BUILD_EXIT_CODE=$?
+            
+            if [ $BUILD_EXIT_CODE -eq 0 ]; then
+                log_info "PXE image build completed successfully!"
+            else
+                log_error "PXE image build failed with exit code $BUILD_EXIT_CODE"
+                return 1
+            fi
+            
             cd ..
         else
             log_warn "PXE image build requires root privileges"
