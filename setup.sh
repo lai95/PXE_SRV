@@ -570,13 +570,17 @@ subnet 192.168.1.0 netmask 255.255.255.0 {
     option routers 192.168.1.1;
     option domain-name-servers 192.168.1.2;
     
-    # iPXE Configuration - serve menu.ipxe for iPXE clients
+    # iPXE Configuration - detect iPXE clients more reliably
     if exists user-class and option user-class = "iPXE" {
         filename "menu.ipxe";
         next-server 192.168.1.2;
-    } else {
+    } elsif option vendor-class-identifier = "PXEClient:Arch:00000:UNDI:002001" {
         # Traditional PXE clients get pxelinux.0
         filename "pxelinux.0";
+        next-server 192.168.1.2;
+    } else {
+        # Default to iPXE for modern clients
+        filename "menu.ipxe";
         next-server 192.168.1.2;
     }
     
