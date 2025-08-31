@@ -150,6 +150,7 @@ RUN dnf update -y && \
 # Install Foreman/Katello
 RUN dnf install -y https://yum.theforeman.org/releases/3.15/el9/x86_64/foreman-release.rpm && \
     dnf install -y https://yum.theforeman.org/katello/4.12/katello/el9/x86_64/katello-repos-latest.rpm && \
+    dnf install -y puppet-agent && \
     dnf install -y foreman-installer
 
 # Configure services
