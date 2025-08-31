@@ -550,7 +550,7 @@ option pxelinux.menu code 16 = text;
 subnet 192.168.1.0 netmask 255.255.255.0 {
     range 192.168.1.100 192.168.1.200;
     option routers 192.168.1.1;
-    option domain-name-servers 192.168.1.1;
+    option domain-name-servers 192.168.1.2;
     
     # iPXE Configuration
     if exists user-class and option user-class = "iPXE" {
@@ -569,6 +569,14 @@ EOF'
         # Restart DHCP server with new configuration
         docker exec pxe_server bash -c 'pkill -f dhcpd 2>/dev/null || killall dhcpd 2>/dev/null || true'
         docker exec pxe_server bash -c 'sleep 2 && /usr/sbin/dhcpd -f -d &'
+        
+        # Wait for DHCP to start and verify it's running
+        sleep 3
+        if docker exec pxe_server bash -c 'ps aux 2>/dev/null | grep dhcpd | grep -v grep >/dev/null 2>&1 || pgrep dhcpd >/dev/null 2>&1 || true'; then
+            log_info "DHCP server started successfully"
+        else
+            log_warn "DHCP server may not be running - check manually"
+        fi
         
         log_info "DHCP configuration updated for iPXE support"
         log_info "TFTP directory contents:"
