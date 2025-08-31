@@ -352,7 +352,7 @@ configure_foreman() {
         log_info "Checking if Foreman was installed..."
         if docker exec pxe_server test -f /etc/foreman/foreman.yml 2>/dev/null; then
             log_info "Foreman configuration file found, checking service status..."
-            if docker exec pxe_server systemctl is-active --quiet foreman 2>/dev/null || \
+            if docker exec pxe_server systemctl is-active foreman 2>/dev/null || \
                docker exec pxe_server pgrep -f foreman >/dev/null 2>&1; then
                 log_info "Foreman service is running in container"
                 break
