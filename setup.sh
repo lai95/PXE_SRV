@@ -112,43 +112,47 @@ setup_dev_environment() {
 create_docker_files() {
     log_info "Creating Docker configuration files..."
     
+    # Create docker directory
+    mkdir -p docker
+    
     # PXE Server Dockerfile
     cat > docker/pxe_server.Dockerfile << 'EOF'
 FROM rockylinux:9
 
 # Install system packages
-RUN dnf update -y && dnf install -y \
-    epel-release \
-    wget \
-    curl \
-    vim \
-    htop \
-    net-tools \
-    bind-utils \
-    tcpdump \
-    iotop \
-    sysstat \
-    lsof \
-    strace \
-    gcc \
-    make \
-    python3 \
-    python3-pip \
-    python3-devel \
-    openssl \
-    ca-certificates \
-    ntp \
-    chrony \
-    firewalld \
-    dhcp-server \
-    tftp-server \
-    syslinux \
+RUN dnf update -y && \
+    dnf install -y epel-release && \
+    dnf install -y \
+        wget \
+        curl \
+        vim \
+        htop \
+        net-tools \
+        bind-utils \
+        tcpdump \
+        iotop \
+        sysstat \
+        lsof \
+        strace \
+        gcc \
+        make \
+        python3 \
+        python3-pip \
+        python3-devel \
+        openssl \
+        ca-certificates \
+        ntp \
+        chrony \
+        firewalld \
+        dhcp-server \
+        tftp-server \
+        syslinux \
     && dnf clean all
 
 # Install Foreman/Katello
-RUN dnf install -y https://yum.theforeman.org/releases/3.0/el9/x86_64/foreman-release.rpm \
-    && dnf install -y https://yum.theforeman.org/katello/3.0/katello/el9/x86_64/katello-repos-latest.rpm \
-    && dnf install -y foreman-installer
+RUN dnf install -y https://yum.theforeman.org/releases/3.0/el9/x86_64/foreman-release.rpm && \
+    dnf install -y https://yum.theforeman.org/katello/3.0/katello/el9/x86_64/katello-repos-latest.rpm && \
+    dnf install -y foreman-installer
 
 # Configure services
 RUN systemctl enable firewalld chronyd dhcpd tftp

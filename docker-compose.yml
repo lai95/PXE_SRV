@@ -5,7 +5,7 @@ services:
   pxe_server:
     build:
       context: .
-      dockerfile: docker/pxe_server.Dockerfile
+      dockerfile: pxe_server.Dockerfile
     container_name: pxe_server
     hostname: pxe-server
     ports:
@@ -34,7 +34,7 @@ services:
   main_program:
     build:
       context: .
-      dockerfile: docker/main_program.Dockerfile
+      dockerfile: main_program.Dockerfile
     container_name: main_program
     hostname: main-program
     ports:
@@ -55,7 +55,7 @@ services:
   pxe_client:
     build:
       context: .
-      dockerfile: docker/pxe_client.Dockerfile
+      dockerfile: pxe_client.Dockerfile
     container_name: pxe_client
     hostname: test-client
     volumes:
