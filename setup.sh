@@ -362,6 +362,19 @@ configure_foreman() {
             # Check if Foreman packages are installed
             if docker exec pxe_server rpm -qa | grep -q foreman; then
                 log_info "Foreman packages are installed but not configured"
+                log_info "Attempting to run foreman-installer..."
+                if docker exec pxe_server foreman-installer --help &>/dev/null; then
+                    log_info "Running foreman-installer to configure Foreman..."
+                    docker exec pxe_server foreman-installer --foreman-admin-password=admin123 --foreman-admin-username=admin --foreman-server-name=pxe-server.local
+                    log_info "Foreman installer completed, checking if service is now running..."
+                    sleep 10
+                    if docker exec pxe_server test -f /etc/foreman/foreman.yml; then
+                        log_info "Foreman configuration created successfully!"
+                        break
+                    fi
+                else
+                    log_error "foreman-installer command not found or failed"
+                fi
             else
                 log_error "Foreman packages are NOT installed - Docker build failed!"
                 log_info "Container logs may show the failure reason"
