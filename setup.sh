@@ -366,11 +366,12 @@ configure_foreman() {
                 if docker exec pxe_server foreman-installer --help &>/dev/null; then
                     log_info "Running foreman-installer to configure Foreman..."
                     
-                    # Fix hostname issue first
+                    # Fix hostname issue first (Docker-compatible commands)
                     log_info "Fixing hostname configuration for Foreman..."
-                    docker exec pxe_server hostnamectl set-hostname pxe-server.local
+                    docker exec pxe_server bash -c 'echo "pxe-server.local" > /etc/hostname'
                     docker exec pxe_server bash -c 'echo "127.0.0.1 pxe-server.local pxe-server" >> /etc/hosts'
                     docker exec pxe_server bash -c 'echo "::1 pxe-server.local pxe-server" >> /etc/hosts'
+                    docker exec pxe_server hostname pxe-server.local
                     
                     # Use default configuration with minimal options
                     docker exec pxe_server foreman-installer --no-colors
