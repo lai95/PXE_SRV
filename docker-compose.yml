@@ -13,7 +13,7 @@ services:
       - "67:67/udp"  # DHCP
       - "69:69/udp"  # TFTP
       - "53:53/udp"  # DNS
-      - "22:22"      # SSH
+      - "2222:22"    # SSH (mapped to avoid conflict with host)
     volumes:
       - pxe_data:/var/lib/tftpboot
       - foreman_data:/var/lib/foreman
