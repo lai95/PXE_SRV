@@ -61,8 +61,8 @@ start_service() {
                 # Remove PID file if it exists
                 rm -f /var/run/in.tftpd.pid
                 sleep 2
-                # Start TFTP and capture its PID manually
-                /usr/sbin/in.tftpd -s /var/lib/tftpboot -l &
+                # Start TFTP with nohup to prevent it from dying when parent shell goes to background
+                nohup /usr/sbin/in.tftpd -s /var/lib/tftpboot -l > /dev/null 2>&1 &
                 TFTP_PID=$!
                 # Create PID file manually
                 echo $TFTP_PID > /var/run/in.tftpd.pid
