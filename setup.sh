@@ -375,8 +375,10 @@ configure_foreman() {
                     
                     # Fix reverse DNS for IPv6 localhost - ensure proper format
                     log_info "Fixing reverse DNS configuration..."
-                    docker exec pxe_server bash -c 'grep -v "::1.*localhost" /etc/hosts > /tmp/hosts.new && mv /tmp/hosts.new /etc/hosts'
-                    docker exec pxe_server bash -c 'echo "::1 pxe-server.local pxe-server localhost" >> /etc/hosts'
+                    # Since /etc/hosts is read-only in Docker, we'll work with what we have
+                    # The hostname command should be sufficient for Foreman
+                    log_info "Hostname set to: $(docker exec pxe_server hostname)"
+                    log_info "FQDN should now be: $(docker exec pxe_server hostname -f)"
                     
                     # Use default configuration with minimal options
                     docker exec pxe_server foreman-installer --no-colors
