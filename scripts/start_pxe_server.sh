@@ -61,15 +61,12 @@ start_service() {
                 # Remove PID file if it exists
                 rm -f /var/run/in.tftpd.pid
                 sleep 2
-                # Start TFTP with explicit PID file
-                /usr/sbin/in.tftpd -s /var/lib/tftpboot -l -p /var/run/in.tftpd.pid &
-                # Wait a moment for PID file to be created
-                sleep 1
-                if [ -f /var/run/in.tftpd.pid ]; then
-                    log_info "tftp started in background (PID: $(cat /var/run/in.tftpd.pid))"
-                else
-                    log_warn "tftp started but PID file not created"
-                fi
+                # Start TFTP and capture its PID manually
+                /usr/sbin/in.tftpd -s /var/lib/tftpboot -l &
+                TFTP_PID=$!
+                # Create PID file manually
+                echo $TFTP_PID > /var/run/in.tftpd.pid
+                log_info "tftp started in background (PID: $TFTP_PID)"
             fi
             ;;
         *)
