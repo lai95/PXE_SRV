@@ -228,7 +228,8 @@ main() {
             fi
         fi
         
-        if [ "$dhcpd_running" = false ] || [ "$tftp_running" = false ]; then
+        # Only restart if both services are actually down
+        if [ "$dhcpd_running" = false ] && [ "$tftp_running" = false ]; then
             log_error "Critical services stopped. Restarting..."
             # Kill existing processes before restarting
             pkill -f dhcpd 2>/dev/null || true
@@ -237,6 +238,18 @@ main() {
             rm -f /var/run/dhcpd.pid /var/run/in.tftpd.pid
             sleep 2
             start_service dhcpd
+            start_service tftp
+        elif [ "$dhcpd_running" = false ]; then
+            log_warn "DHCP service stopped. Restarting..."
+            pkill -f dhcpd 2>/dev/null || true
+            rm -f /var/run/dhcpd.pid
+            sleep 2
+            start_service dhcpd
+        elif [ "$tftp_running" = false ]; then
+            log_warn "TFTP service stopped. Restarting..."
+            pkill -f tftpd 2>/dev/null || true
+            rm -f /var/run/in.tftpd.pid
+            sleep 2
             start_service tftp
         fi
     done
