@@ -42,11 +42,16 @@ check_prerequisites() {
     local missing_tools=()
     
     # Check for required tools
-    for tool in docker docker-compose git python3 pip3; do
+    for tool in docker git python3 pip3; do
         if ! command -v $tool &> /dev/null; then
             missing_tools+=($tool)
         fi
     done
+    
+    # Check for Docker Compose (either V1 or V2)
+    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+        missing_tools+=("docker-compose")
+    fi
     
     if [ ${#missing_tools[@]} -ne 0 ]; then
         log_error "Missing required tools: ${missing_tools[*]}"
