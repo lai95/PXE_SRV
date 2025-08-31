@@ -373,6 +373,11 @@ configure_foreman() {
                     docker exec pxe_server bash -c 'echo "::1 pxe-server.local pxe-server" >> /etc/hosts'
                     docker exec pxe_server hostname pxe-server.local
                     
+                    # Fix reverse DNS for IPv6 localhost - ensure proper format
+                    log_info "Fixing reverse DNS configuration..."
+                    docker exec pxe_server bash -c 'sed -i "/::1.*localhost/d" /etc/hosts'
+                    docker exec pxe_server bash -c 'echo "::1 pxe-server.local pxe-server localhost" >> /etc/hosts'
+                    
                     # Use default configuration with minimal options
                     docker exec pxe_server foreman-installer --no-colors
                     log_info "Foreman installer completed, checking if service is now running..."
