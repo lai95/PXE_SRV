@@ -487,7 +487,7 @@ build_pxe_image() {
         docker cp pxe_image/output/vmlinuz-virt pxe_server:/var/lib/tftpboot/
         docker cp pxe_image/output/initramfs-virt pxe_server:/var/lib/tftpboot/
         
-        # Create PXE boot configuration
+        # Create PXE boot configuration for traditional PXE
         docker exec pxe_server bash -c 'cat > /var/lib/tftpboot/pxelinux.cfg/default << EOF
 DEFAULT diagnostic
 PROMPT 0
@@ -501,7 +501,76 @@ LABEL diagnostic
     ENDTEXT
 EOF'
         
+        # Create iPXE boot configuration (for modern PXE firmware)
+        docker exec pxe_server bash -c 'cat > /var/lib/tftpboot/boot.ipxe << EOF
+#!ipxe
+set base-url tftp://192.168.1.2/
+kernel vmlinuz-virt
+initrd initramfs-virt
+boot
+EOF'
+        
+        # Create menu.ipxe for iPXE menu interface
+        docker exec pxe_server bash -c 'cat > /var/lib/tftpboot/menu.ipxe << EOF
+#!ipxe
+set menu-timeout 5000
+set submenu-timeout 5000
+
+:start
+menu PXE Diagnostic System
+item --gap -- -------------------------
+item diagnostic Alpine Linux Diagnostics
+item --gap -- -------------------------
+item exit Exit to iPXE shell
+choose --timeout 30000 --default diagnostic option && goto \${option}
+
+:diagnostic
+kernel vmlinuz-virt
+initrd initramfs-virt
+boot
+
+:exit
+exit
+EOF'
+        
         log_info "PXE boot files created successfully!"
+        
+        # Update DHCP configuration to serve iPXE boot files
+        docker exec pxe_server bash -c 'cat > /etc/dhcp/dhcpd.conf << EOF
+default-lease-time 600;
+max-lease-time 7200;
+authoritative;
+
+subnet 192.168.1.0 netmask 255.255.255.0 {
+    range 192.168.1.100 192.168.1.200;
+    option routers 192.168.1.1;
+    option domain-name-servers 192.168.1.1;
+    
+    # PXE Boot Configuration
+    option space pxelinux;
+    option pxelinux.magic code 208 = string;
+    option pxelinux.reboot-time code 209 = unsigned integer 32;
+    option pxelinux.menu code 16 = text;
+    
+    # iPXE Configuration
+    if exists user-class and option user-class = "iPXE" {
+        filename "menu.ipxe";
+    } else {
+        filename "pxelinux.0";
+        next-server 192.168.1.2;
+    }
+    
+    # Boot file for traditional PXE
+    option bootfile-name "pxelinux.0";
+    option tftp-server-name "192.168.1.2";
+}
+EOF'
+        
+        # Restart DHCP server with new configuration
+        docker exec pxe_server pkill -f dhcpd
+        docker exec pxe_server /usr/sbin/dhcpd -f -d &
+        
+        log_info "DHCP configuration updated for iPXE support"
         log_info "TFTP directory contents:"
         docker exec pxe_server ls -la /var/lib/tftpboot/
     else
