@@ -114,6 +114,22 @@ EOF
     log_info "DHCP configuration created"
 }
 
+# Function to setup TFTP directory
+setup_tftp() {
+    log_info "Setting up TFTP directory..."
+    
+    # Ensure TFTP directory exists with proper permissions
+    mkdir -p /var/lib/tftpboot
+    chmod 755 /var/lib/tftpboot
+    chown root:root /var/lib/tftpboot
+    
+    # Create basic PXE structure
+    mkdir -p /var/lib/tftpboot/pxelinux.cfg
+    chmod 755 /var/lib/tftpboot/pxelinux.cfg
+    
+    log_info "TFTP directory setup complete"
+}
+
 # Main startup sequence
 main() {
     log_info "Starting PXE Server..."
